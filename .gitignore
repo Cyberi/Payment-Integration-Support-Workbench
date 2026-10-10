@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+*.egg-info/
+build/
+dist/
+
+# Secrets and local settings (only .env.example is committed)
+.env
+.env.*
+!.env.example
+
+# Runtime data: database, WAL files and JSON logs
+var/
+*.sqlite3
+*.sqlite3-wal
+*.sqlite3-shm
+*.db
+logs/
+*.log
+*.jsonl
+
+# Editors / OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db

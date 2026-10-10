@@ -1,0 +1,3 @@
+# Runtime: none. The app uses only the Python 3.12 standard library.
+# Test runner (optional, pytest also collects the unittest tests in tests/):
+pytest>=8.0
