@@ -229,6 +229,8 @@ def case_detail(req, ctx):
     rb_link = f'<a class="btn sec" href="/runbooks/{e(rb["slug"])}">راهنمای این مورد</a>' if rb else ""
     pay = f'<a href="/payments/{e(c["payment_id"])}">{ltr(c["payment_id"])}</a>' if c.get("payment_id") else "-"
     status_opts = "".join(f'<option value="{s}" {"selected" if s == c["status"] else ""}>{e(STATUS_FA[s])}</option>' for s in STATUS_FA if s in ("new","investigating","waiting_for_merchant","escalated","resolved","closed"))
+    root_cause_labels = {"not_determined": "تعیین نشده", "confirmed": "تأییدشده با شواهد", "unknown": "نامشخص / نیازمند ارجاع"}
+    root_cause_status_opts = "".join(f'<option value="{status}" {"selected" if status == c["root_cause_status"] else ""}>{label}</option>' for status, label in root_cause_labels.items())
     blank = lambda k: e(c.get(k) or "")
     body = f"""<h1>{ltr(c['case_number'])} — {e(c['title'])}</h1>
 <p>{tag(c['status'])} <span class="tag sev-{c['severity']}">{c['severity']}</span> {rb_link} | پرداخت مرتبط: {pay}</p>
@@ -247,6 +249,7 @@ def case_detail(req, ctx):
 <form method="post" action="/ui/cases/{e(c['case_number'])}/status"><label>تغییر وضعیت</label><select name="status">{status_opts}</select>
 <label>نتیجه/راهکار (برای resolved الزامی)</label><textarea name="resolution">{blank('resolution')}</textarea>
 <label>تست تأیید (برای resolved الزامی)</label><textarea name="validation">{blank('validation')}</textarea>
+<label>وضعیت علت ریشه‌ای</label><select name="root_cause_status">{root_cause_status_opts}</select><p class="muted">«تأییدشده با شواهد» را فقط پس از بررسی شواهد انتخاب کنید؛ وارد کردن توضیح به‌تنهایی تأیید محسوب نمی‌شود.</p>
 <label>علت ریشه‌ای (اگر تأیید شد)</label><textarea name="root_cause">{blank('root_cause')}</textarea>
 <label>جمع‌بندی بستن (برای closed الزامی)</label><textarea name="closure_summary">{blank('closure_summary')}</textarea>
 <label>پیام به پذیرنده (برای closed الزامی)</label><textarea name="merchant_message">{blank('merchant_message')}</textarea>
