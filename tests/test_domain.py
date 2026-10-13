@@ -1,5 +1,7 @@
 import unittest
 
+from app.main import _is_loopback_host
+
 from app.domain import money
 from app.domain.states import InvalidTransition, ensure_transition, can_transition
 
@@ -32,6 +34,18 @@ class MoneyTests(unittest.TestCase):
             money.to_irr(1.5, "IRR")
         with self.assertRaises(money.MoneyError):
             money.to_irr(True, "IRR")
+
+
+class AppBindingTests(unittest.TestCase):
+    def test_loopback_hosts_are_allowed(self):
+        self.assertTrue(_is_loopback_host("127.0.0.1"))
+        self.assertTrue(_is_loopback_host("::1"))
+        self.assertTrue(_is_loopback_host("localhost"))
+
+    def test_network_hosts_are_rejected(self):
+        self.assertFalse(_is_loopback_host("0.0.0.0"))
+        self.assertFalse(_is_loopback_host("192.168.1.10"))
+        self.assertFalse(_is_loopback_host("example.com"))
 
 
 if __name__ == "__main__":

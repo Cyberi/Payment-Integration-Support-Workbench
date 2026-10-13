@@ -65,7 +65,8 @@ def ui_case_status(req, ctx):
     ident = req.params["ident"]
     f = _form(req)
     body = {k: f.get(k, "") for k in ("resolution", "validation", "root_cause", "closure_summary", "merchant_message")}
-    body["root_cause_status"] = "confirmed" if body["root_cause"].strip() else "unknown"
+    if "root_cause_status" in f:
+        body["root_cause_status"] = f["root_cause_status"]
     body["status"] = f.get("status")
     try:
         cases.update_case(ctx, ident, body)

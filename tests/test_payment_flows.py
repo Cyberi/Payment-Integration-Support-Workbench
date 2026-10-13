@@ -216,5 +216,33 @@ class PaymentFlowTests(unittest.TestCase):
         self.assertIn("correlation_id", r.json())
 
 
+    def test_ui_does_not_auto_confirm_root_cause_from_text(self):
+        created = self.client.post("/api/v1/support/cases", json_body={
+            "title": "Root cause status regression",
+            "problem_type": "other",
+            "severity": "P3",
+            "business_impact": "Synthetic test only",
+            "merchant_report": "A synthetic report for the UI regression test",
+        })
+        self.assertEqual(created.status_code, 201, created.text)
+        case_number = created.json()["case"]["case_number"]
+
+        updated = self.client.post(
+            f"/ui/cases/{case_number}/status",
+            form={"status": "investigating", "root_cause": "A plausible but unverified hypothesis"},
+        )
+        self.assertIn(updated.status_code, (302, 303))
+        stored = self.client.get(f"/api/v1/support/cases/{case_number}").json()["case"]
+        self.assertEqual(stored["root_cause_status"], "not_determined")
+
+        self.client.post(
+            f"/ui/cases/{case_number}/status",
+            form={"status": "investigating", "root_cause": "Verified with event timeline",
+                  "root_cause_status": "confirmed"},
+        )
+        stored = self.client.get(f"/api/v1/support/cases/{case_number}").json()["case"]
+        self.assertEqual(stored["root_cause_status"], "confirmed")
+
+
 if __name__ == "__main__":
     unittest.main()
