@@ -1,156 +1,218 @@
 # Payment Integration Support Workbench
 
-> **Simulation only.** This is a local support lab. It has no real payment processing, no real provider connection and no real customer data. Every merchant, order, payment and webhook is synthetic.
+**English** · [فارسی — نسخهٔ فارسی](README.fa.md)
 
-A local fintech support lab for diagnosing mocked payment API, webhook, verification, refund and reconciliation issues with traceable evidence, SQL queries, and repeatable runbooks.
+> **Simulation only.** This repository is a local training and portfolio project. It does not process real payments, connect to a bank, payment service provider (PSP) or gateway, or use real customer or transaction data. All merchants, orders, payments, provider responses and webhooks are synthetic.
 
-**Demo banner:** the console shows "Demo/Synthetic Data" on every page.
+A hands-on lab for demonstrating how an application-support analyst investigates payment-integration incidents using API responses, webhook evidence, correlation IDs, structured logs, named read-only SQL queries, reconciliation exceptions and support-case runbooks.
 
-## Who this is for
-Technical support, application support and payment-integration support people at non-bank companies (fintech, payment-service providers, financial SaaS) who want to show how they investigate an incident: from a merchant's report, through API calls, webhooks, logs and database evidence, to a root cause, a fix, a validation and a message back to the merchant.
-
-## The problem being modelled
-A shop called **Sefid Market** (fictional) uses a fictional provider, **NavaPay Simulator**. Payments fail in ways that look alike from the outside: a webhook never arrives, a timeout hides the real outcome, a retry duplicates an event, a unit setting is wrong, a signature is stale, a cancelled order gets paid. The lab reproduces these cases and shows how to tell them apart with evidence.
-
-## What is implemented
-- **Payments and orders:** create order, start a payment attempt, read status, verify with the provider, cancel with a warning when a payment is still open.
-- **Provider simulator:** decides success, failure or expiry; sends signed webhooks; can skip, duplicate or sign wrongly; can time out on request.
-- **Webhooks:** HMAC-SHA256 signature check, duplicate protection by `event_id`, unknown-transaction handling, amount checks, every delivery stored.
-- **Idempotency:** `Idempotency-Key` replay for the same body; HTTP 409 for the same key with a different body.
-- **Refunds (test):** partial and full, with a hard limit on the refundable remainder.
-- **Unit-aware adapter:** integer IRR internally, explicit IRT/IRR setting per merchant, exact conversion or error.
-- **Evidence:** payment timeline (audit, webhooks, refunds, logs, case notes) by `payment_id` or `correlation_id`; structured logs with redaction; named read-only SQL queries.
-- **Support cases:** 11-step structure (report, data needed, priority, checks, evidence, hypotheses, root cause, resolution, authority boundary, validation, merchant message). Status rules block `resolved` and `closed` until the required fields are filled.
-- **Reconciliation:** synthetic provider CSV, five exception types (`internal_only`, `provider_only`, `amount_mismatch`, `status_mismatch`, `duplicate_provider_reference`), each linked to a case or resolved with a note. No row is ever deleted and no amount is ever changed.
-- **Runbooks (Persian):** ten runbooks, each with symptom, preconditions, data needed, checks, queries, APIs, allowed and forbidden actions, escalation, verification and a sample merchant message.
-- **Console (Persian, RTL):** dashboard, payments and timeline, support cases, diagnostics, reconciliation, runbooks.
-- **Postman collection** and **curl examples** for every main flow.
-
-### Planned, not built
-Nothing is advertised beyond what runs. Possible next steps are listed under *Known limitations*.
-
-## Architecture
-```mermaid
-flowchart LR
-    M[Merchant system] -->|REST /api/v1| API[API layer]
-    S[NavaPay Simulator] -->|signed webhook| WH[Webhook endpoint]
-    API --> SVC[Services: orders, payments, refunds, reconciliation, cases]
-    WH --> SVC
-    SVC --> AD[Unit-aware adapter]
-    AD --> S
-    SVC --> DB[(SQLite)]
-    SVC --> LOG[Structured logs]
-    UI[Persian console] --> SVC
-```
-Details and decisions: [docs/architecture.md](docs/architecture.md).
+**Intended audience:** technical support, application support, financial-software support and payment-integration support roles.
 
 ## Screenshots
-| | |
-|---|---|
-| ![Dashboard](screenshots/01-dashboard.png) | **Dashboard.** Live counters from the seeded database: payments to review, open cases, webhook rejections and duplicates. |
-| ![Payment timeline](screenshots/02-payment-timeline.png) | **Payment timeline.** Audit events, webhook receipts (with signature validity), logs and case notes in one order. |
-| ![Support case](screenshots/03-support-case.png) | **Support case.** The 11-step structure with evidence and a root-cause status that can stay "unknown". |
-| ![Reconciliation exceptions](screenshots/04-reconciliation-exceptions.png) | **Reconciliation exceptions.** Each mismatch has a suggestion, a verification step and a case link. |
-| ![API diagnostic](screenshots/05-api-diagnostic.png) | **Diagnostic query.** A named, read-only SQL query and its rows for one payment. |
-| ![Browser capture of support case](screenshots/06-support-case-browser.png) | **Live browser capture.** Full-page Chromium screenshot of the seeded `CASE-1001` screen, including the explicit root-cause status selector introduced in this branch. |
 
-The first five images are static renders of HTML served by the application; the sixth is a full-page screenshot captured from a real headless Chromium session against a freshly seeded running app in GitHub Actions. Capture details: [screenshots/README.md](screenshots/README.md).
+| Dashboard | Payment timeline |
+|---|---|
+| ![Dashboard](screenshots/01-dashboard.png) | ![Payment timeline](screenshots/02-payment-timeline.png) |
+
+| Support case | Reconciliation exceptions |
+|---|---|
+| ![Support case](screenshots/03-support-case.png) | ![Reconciliation exceptions](screenshots/04-reconciliation-exceptions.png) |
+
+| Read-only diagnostic query | Browser capture of the updated support case |
+|---|---|
+| ![API diagnostic](screenshots/05-api-diagnostic.png) | ![Browser capture showing the root-cause status selector](screenshots/06-support-case-browser.png) |
+
+The first five images are static renders of the application's server-rendered HTML. The sixth is a full-page Chromium screenshot captured from the running application after the demo database was seeded; it shows the explicit root-cause status selector in the support-case form. See [screenshots/README.md](screenshots/README.md) for capture details.
+
+## What the lab demonstrates
+
+- **Payment lifecycle:** create an order and payment, query status, verify with the simulated provider, and inspect how order and payment states relate.
+- **Provider and webhook behaviour:** simulate success, failure, expiry, timeout, a missing webhook, a duplicate delivery or an invalid signature.
+- **Webhook verification:** validate HMAC-SHA256 against the raw request body, reject invalid signatures before processing, check the amount and prevent duplicate event processing by event_id.
+- **Idempotency:** replay the stored response for the same Idempotency-Key and same request body; return HTTP 409 when the same key is reused with a different body.
+- **Timeout safety:** a timeout results in unknown, not an assumed failure. The next step is to verify the outcome rather than creating a second payment or manually changing the state.
+- **Money and unit handling:** monetary amounts are integers in IRR internally. The adapter explicitly handles the configured provider unit (IRR or IRT) and refuses inexact conversion; it does not round amounts.
+- **Refunds:** simulate partial and full refunds while enforcing the remaining refundable balance.
+- **Evidence timeline:** follow audit events, webhook receipts, refunds, logs and case notes by payment_id or correlation_id.
+- **Support-case workflow:** record the merchant report, required and prohibited data, priority, checks, evidence, hypotheses, root cause, resolution, authority boundary, validation and merchant message. A root cause must be explicitly marked; entering text alone does not confirm it. Resolution and closure have required fields.
+- **Reconciliation:** compare a synthetic provider CSV with internal records and flag five exception types. Exceptions can be linked to a support case or resolved with a note; reconciliation does not delete rows or alter transaction amounts.
+- **Diagnostics:** run nine predefined scenarios, inspect structured logs and execute named read-only SQL queries.
+- **Persian console and runbooks:** the web console is Persian and right-to-left (RTL), server-rendered, and does not rely on JavaScript or a CDN. The repository includes ten Persian runbooks.
+
+## Architecture
+
+The application uses Python's standard-library WSGI server, sqlite3, server-rendered HTML and a separate in-process component named NavaPay Simulator. It is a single-process local lab; the provider simulator is not a real external integration.
+
+```mermaid
+flowchart LR
+    UI[Persian RTL console] --> S[Application services]
+    API[REST API /api/v1] --> S
+    S --> A[Unit-aware provider adapter]
+    A --> P[NavaPay Simulator]
+    P --> W[Signed webhook handler]
+    W --> S
+    S --> DB[(SQLite)]
+    S --> L[Structured logs and audit events]
+    UI --> D[Diagnostics, fixed queries and runbooks]
+```
+
+Implementation details: [Architecture](docs/architecture.md) · [Domain model](docs/domain-model.md) · [API reference and troubleshooting](docs/api-troubleshooting.md).
 
 ## Quick start
 
-**Requirements:** Python 3.12 or newer. No packages to install. The app uses only the standard library.
+**Requirements:** Python 3.12 or newer. No runtime package installation is required; the workbench uses the Python standard library.
 
-### Windows (PowerShell)
+Clone the repository and open its directory:
+
+```bash
+git clone https://github.com/Cyberi/Payment-Integration-Support-Workbench.git
+cd Payment-Integration-Support-Workbench
+```
+
+Reset and seed the synthetic database, then start the server. Run these commands in order.
+
+**Windows (PowerShell)**
+
 ```powershell
 py -3.12 -m scripts.reset_demo_data
 py -3.12 -m app.main
 ```
-Open http://127.0.0.1:8000
 
-### Linux / macOS
+**Linux / macOS**
+
 ```bash
 python3.12 -m scripts.reset_demo_data
 python3.12 -m app.main
 ```
-Open http://127.0.0.1:8000
 
-Optional: copy `.env.example` to `.env` to change the port or demo keys. `.env` is git-ignored. This simulation-only app refuses to bind to non-loopback network interfaces; keep it on `127.0.0.1` or `localhost`.
+Open [http://127.0.0.1:8000](http://127.0.0.1:8000).
 
-## Database seed and reset
-- `python -m scripts.reset_demo_data` deletes `var/lab.sqlite3`, creates the schema, runs the scenarios, writes the demo CSV, and opens eight support cases. It takes a few seconds and is repeatable: IDs are deterministic.
-- `python -m scripts.seed_demo_data` does the same without the summary line.
-- The demo CSV is `data/examples/provider-transactions-demo.csv`.
+The first command deletes the database at the configured LAB_DB_PATH and rebuilds it with synthetic merchants, scenarios, support cases and reconciliation exceptions. Do not run the reset command against a database whose contents you need to preserve. A successful reset prints a summary similar to:
 
-Expected output of reset:
-```
+```text
 reset done. merchants=2 scenarios_ok=9/9 cases=8 reconciliation_exceptions=5
 ```
 
-## Running the tests
+The app intentionally refuses to bind to a non-loopback network interface. It is designed for local use on one machine, not for exposure to a LAN or the public internet.
+
+## Configuration
+
+The defaults are suitable for a local demo. To override them, copy .env.example to .env; .env is ignored by Git.
+
+```dotenv
+LAB_HOST=127.0.0.1
+LAB_PORT=8000
+LAB_DB_PATH=var/lab.sqlite3
+LAB_LOG_PATH=var/logs/app.jsonl
+LAB_API_KEY=lab_demo_api_key_change_me
+LAB_WEBHOOK_SECRET=lab_demo_webhook_secret_change_me
+LAB_MAX_WEBHOOK_ATTEMPTS=3
+```
+
+These are **demo values, not production credentials**. Keep the application on loopback and do not place real secrets in the repository. Relevant configuration, controls and limitations are documented in [Security and limitations](docs/security-and-limitations.md).
+
+## Tests and continuous integration
+
+Run the unit and integration suite with:
+
 ```bash
 python -m unittest discover -s tests -t . -v
 ```
-(`pytest` also collects these tests if you have it installed; this environment did not have pytest, so the run below used unittest.)
 
-Latest verified CI result (Python 3.12):
-```
-Ran 21 tests
+The latest verified CI run on Python 3.12 passed **21 tests**. The suite covers payment flows, timeout handling, duplicate and invalid webhooks, idempotency, refund limits, unit mismatch handling, reconciliation, correlation-based evidence, case closure rules, log redaction, input validation, explicit root-cause confirmation and loopback-only binding.
 
-OK
-```
-The 21 unit/integration tests cover payment flows, timeout state handling, duplicate and invalid webhooks, idempotency, refunds, unit conversion, reconciliation, evidence timelines, case closure rules, log redaction, input validation, and the new regressions for explicit root-cause confirmation and loopback-only binding. GitHub Actions also checks that the generated Postman collection matches its builder.
+GitHub Actions also checks that the checked-in Postman collection matches the collection generator. On pushes to a non-main branch, a separate job launches Chromium, starts a freshly seeded local instance, captures the support-case page and uploads the image as a workflow artifact.
 
-## Postman
-Import `postman/payment-integration-support.postman_collection.json`. Set `baseUrl` (default `http://127.0.0.1:8000`) and `apiKey` (demo value in `.env.example`). Run folders in order. The happy-path folder stores `orderId`, `paymentId`, and the idempotency key for the replay checks; the timeout folder creates its own order and stores a separate `timeoutPaymentId` so it does not depend on the already-paid happy-path order. The collection file is generated by `postman/build_collection.py`. I validated the JSON structure but did not run it in Postman or newman in this environment.
+[Latest successful CI run](https://github.com/Cyberi/Payment-Integration-Support-Workbench/actions).
 
-## Scenario walkthrough: from merchant report to resolution
-The seeded case **CASE-1001** ("order stayed pending even though the provider says paid"):
-1. **Report:** the merchant says the customer's bank SMS shows success, but the order is still pending.
-2. **Data needed:** `payment_id` or `order_id`. Not needed: card number, CVV2, secrets.
-3. **Priority:** P2. One order, but the customer has paid.
-4. **Checks:** `GET /api/v1/payments/{id}` shows `pending` and `pending_payment`. `webhook_events_for_payment` shows no processed event.
-5. **Evidence:** the timeline for the same correlation ID.
-6. **Hypothesis:** the webhook never arrived. Confirm if there is no processed event; reject if there is a rejected one.
-7. **Action:** `POST /api/v1/payments/{id}/verify`. The provider answers SUCCEEDED, so the payment becomes `succeeded` and the order `paid`.
-8. **Validation:** a second verify changes nothing (`no_status_change_needed`).
-9. **Message to merchant:** the order was confirmed by the provider; the cause was a missed notification.
-10. **Closure:** status `resolved` with resolution and validation filled in. Root cause is `confirmed` because the lab simulated it.
+## Postman and API examples
 
-Open it in the console at `/cases/CASE-1001`, or see the other seven cases (`CASE-1002` to `CASE-1008`).
+Import postman/payment-integration-support.postman_collection.json into Postman. Set:
 
-## The nine scenarios
-Run them from the Diagnostics page or `POST /api/v1/diagnostics/scenarios/{name}`:
-`webhook-missing`, `duplicate-webhook`, `timeout-unknown`, `amount-unit-mismatch`, `invalid-signature`, `idempotency-conflict`, `order-payment-conflict`, `refund-limit`, `reconciliation`. Each one drives the real API and reports its steps and correlation ID.
+- **baseUrl** to http://127.0.0.1:8000 unless you changed the local port.
+- **apiKey** to the local demo key configured in .env or .env.example.
 
-## Data, privacy and security boundaries
-- All data is synthetic. Merchant names are fictional. The provider is fictional.
-- No card numbers, CVV2, PINs, bank credentials or customer identity are collected or stored.
-- No secrets are in the repository. The demo API key and webhook secret in `.env.example` are placeholders for a local lab only.
-- Logs never contain request bodies or secrets. Tests check this.
-- Details and the list of controls that are training-only: [docs/security-and-limitations.md](docs/security-and-limitations.md).
+Run the collection folders in order. The happy-path flow stores its own orderId, paymentId and idempotency key. The timeout flow creates a **separate order and payment**, asserts that the initial status is unknown, then verifies the provider's result. This avoids depending on an order that was already paid by the happy-path flow.
 
-## Documentation
-- [Architecture](docs/architecture.md) · [Domain model](docs/domain-model.md) · [API and troubleshooting](docs/api-troubleshooting.md)
-- [Scenario runbooks and incident samples](docs/scenario-runbooks.md) · [Reconciliation](docs/reconciliation.md)
-- [Security and limitations](docs/security-and-limitations.md) · [curl examples](docs/curl-examples.md)
-- Persian summary: [README.fa.md](README.fa.md)
+The collection is generated by postman/build_collection.py; CI verifies that the generated JSON is in sync with that builder. The collection has **not** been represented as having been executed in Postman or Newman. For command-line request examples, see [curl examples](docs/curl-examples.md).
 
-## Known limitations and realistic next steps
-- Single process, SQLite, one writer at a time.
-- The simulator models one plausible provider behaviour. It is not a description of any real provider.
-- Webhook retries are manual, capped by `LAB_MAX_WEBHOOK_ATTEMPTS`. A real system needs a durable retry queue.
-- Next steps, in order of value: a background retry worker; a richer merchant-side test harness; a second, deliberately different provider adapter to show the boundary; a review of the Persian text by a native-speaking support lead.
+Important endpoints include:
 
-## Repository layout
-```
-app/                 application code (domain, services, support, web, console)
-scripts/             reset/seed, runbook export, screenshot render
-postman/             collection and its generator
-docs/                architecture, API, runbooks, reconciliation, security
-data/examples/       synthetic provider CSV
-tests/               unittest tests (pytest-compatible)
-screenshots/         real renders of the console with captions
+| Method | Endpoint | Purpose |
+|---|---|---|
+| GET | /api/v1/health | Check that the local service is running and reports simulation mode |
+| POST | /api/v1/orders | Create a synthetic order |
+| POST | /api/v1/payments | Create a payment attempt; requires Idempotency-Key |
+| GET | /api/v1/payments/{payment_id} | Inspect payment, order and refund state |
+| POST | /api/v1/payments/{payment_id}/verify | Query the simulated provider and reconcile the local state with its answer |
+| POST | /api/v1/simulator/payments/{payment_id}/complete | Choose a simulated outcome and webhook delivery mode |
+| GET | /api/v1/timeline?payment_id=... | Review the evidence timeline |
+| POST | /api/v1/diagnostics/scenarios/{name} | Execute one of the diagnostic scenarios |
+| POST | /api/v1/reconciliation/runs/demo | Run reconciliation against the committed synthetic CSV |
+
+The full list of routes, headers and error responses is in [docs/api-troubleshooting.md](docs/api-troubleshooting.md).
+
+## Incident walkthrough: CASE-1001
+
+The seeded case describes an order that remains pending even though the merchant reports a successful customer payment. A support analyst should:
+
+1. Locate the payment using payment_id or order_id.
+2. Compare the payment and order states, then inspect the evidence timeline.
+3. Check whether a webhook was processed, rejected or never received.
+4. Verify the outcome with the simulated provider instead of trusting a customer message or manually changing the database.
+5. Record the evidence, the hypothesis, the root-cause status and the resolution in the support case.
+6. Validate the final state and write the message to the merchant before resolving or closing the case.
+
+The lab demonstrates the workflow; it does not prescribe a shortcut to mark any payment as successful. Root cause is an explicit evidence-based choice, and the application enforces required information before case resolution or closure.
+
+## The nine diagnostic scenarios
+
+| Scenario | What it demonstrates |
+|---|---|
+| webhook-missing | Provider success with a missing webhook, followed by a safe verification path |
+| duplicate-webhook | Duplicate event delivery without applying the same event twice |
+| timeout-unknown | Uncertain outcome after a provider timeout and subsequent verification |
+| amount-unit-mismatch | A misconfigured IRR/IRT unit that must be flagged rather than silently accepted |
+| invalid-signature | Rejecting an invalid webhook signature |
+| idempotency-conflict | Replay for the same request and conflict for a reused key with a different body |
+| order-payment-conflict | A payment outcome that conflicts with the order state |
+| refund-limit | Rejecting a refund greater than the remaining refundable amount |
+| reconciliation | Detecting differences between the internal ledger and a synthetic provider report |
+
+See [Scenario runbooks](docs/scenario-runbooks.md) and [Reconciliation](docs/reconciliation.md) for the checks, permitted actions, escalation criteria and verification steps.
+
+## Security boundaries and known limitations
+
+This repository is a portfolio/training lab, **not a production payment system**.
+
+- All merchants, transactions, provider events and reconciliation reports are synthetic.
+- No card numbers, CVV2, PINs, bank credentials or real customer identities are required.
+- Webhook signatures are checked with HMAC-SHA256; invalid signatures are rejected before event processing.
+- Diagnostic SQL is selected from named fixed queries with bound parameters; the UI does not accept arbitrary SQL.
+- Request bodies are not logged; sensitive values and PAN-like digit sequences are redacted or masked.
+- Money uses integer amounts and explicit units; refunds cannot exceed the remaining refundable balance.
+- The service is a single process with SQLite and one writer at a time. The provider is an in-process simulator; it does not connect to any real bank, PSP or gateway.
+- The demo API key and webhook secret are static examples. There is no user login, role-based access, MFA, TLS, rate limiting, key rotation, backup policy, retention policy or encryption-at-rest policy.
+- Webhook redelivery is manual and capped. Refunds complete instantly in the simulator, unlike real asynchronous payment systems.
+
+Do not expose this service to a network or use it to process real transactions. See [Security and limitations](docs/security-and-limitations.md) for a fuller breakdown and the controls a production system would need.
+
+## Repository map
+
+```text
+app/
+  domain/       Money rules and entity state machines
+  services/     Orders, payments, refunds, simulator, cases and reconciliation
+  support/      Fixed diagnostic queries, scenarios and Persian runbooks
+  web/          REST API, HTML console and form actions
+data/examples/  Synthetic provider CSV
+docs/           Architecture, API, domain model, runbooks and security notes
+postman/        Collection and its generator
+scripts/        Reset/seed, runbook export and screenshot capture/rendering
+screenshots/    Console screenshots and capture notes
+tests/          unittest suite (also pytest-compatible)
 ```
 
 ## License
+
 MIT. See [LICENSE](LICENSE).
