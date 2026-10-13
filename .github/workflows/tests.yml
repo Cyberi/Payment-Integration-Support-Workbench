@@ -4,6 +4,9 @@ on:
   push:
   pull_request:
 
+permissions:
+  contents: write
+
 jobs:
   unittest:
     runs-on: ubuntu-latest
@@ -20,3 +23,57 @@ jobs:
         run: |
           python -m postman.build_collection
           git diff --exit-code -- postman/payment-integration-support.postman_collection.json
+
+  browser-screenshot:
+    # Capture once on working branches, after the tests pass; never auto-commit to main.
+    if: github.event_name == 'push' && github.ref != 'refs/heads/main'
+    needs: unittest
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out working branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install headless browser
+        run: |
+          python -m pip install playwright
+          python -m playwright install --with-deps chromium
+      - name: Start the seeded local workbench and capture the browser screenshot
+        run: |
+          export LAB_DB_PATH="$RUNNER_TEMP/workbench.sqlite3"
+          export LAB_LOG_PATH="$RUNNER_TEMP/workbench.jsonl"
+          export LAB_HOST="127.0.0.1"
+          export LAB_PORT="8000"
+          python -m scripts.reset_demo_data
+          python -m app.main > "$RUNNER_TEMP/workbench.log" 2>&1 &
+          SERVER_PID=$!
+          trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:8000/api/v1/health >/dev/null; then
+              break
+            fi
+            sleep 1
+          done
+          curl --fail --silent http://127.0.0.1:8000/api/v1/health >/dev/null
+          python -m scripts.capture_screenshot
+      - name: Commit the screenshot if it changed
+        run: |
+          # Avoid a commit loop: a workflow-triggered screenshot commit is not followed
+          # by another screenshot commit from its own run.
+          if [ "$(git log -1 --pretty=%s)" = "chore: refresh support-case screenshot from CI" ]; then
+            echo "Screenshot was just refreshed; no follow-up commit needed."
+            exit 0
+          fi
+          git config user.name "Vahid Razavi"
+          git config user.email "vgodfather656@gmail.com"
+          git add screenshots/06-support-case-browser.png
+          if git diff --cached --quiet; then
+            echo "Screenshot unchanged."
+            exit 0
+          fi
+          git commit -m "chore: refresh support-case screenshot from CI"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
