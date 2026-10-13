@@ -27,11 +27,6 @@ jobs:
   browser-screenshot:
     # Capture once on working branches, after the tests pass; never auto-commit to main.
     if: github.event_name == 'push' && github.ref != 'refs/heads/main'
-    permissions:
-      contents: write
-    concurrency:
-      group: support-workbench-screenshot-${{ github.ref_name }}
-      cancel-in-progress: false
     needs: unittest
     runs-on: ubuntu-latest
     steps:
@@ -65,20 +60,9 @@ jobs:
           done
           curl --fail --silent http://127.0.0.1:8000/api/v1/health >/dev/null
           python -m scripts.capture_screenshot
-      - name: Commit the screenshot if it changed
-        run: |
-          # Avoid a commit loop: a workflow-triggered screenshot commit is not followed
-          # by another screenshot commit from its own run.
-          if [ "$(git log -1 --pretty=%s)" = "chore: refresh support-case screenshot from CI" ]; then
-            echo "Screenshot was just refreshed; no follow-up commit needed."
-            exit 0
-          fi
-          git config user.name "Vahid Razavi"
-          git config user.email "vgodfather656@gmail.com"
-          git add screenshots/06-support-case-browser.png
-          if git diff --cached --quiet; then
-            echo "Screenshot unchanged."
-            exit 0
-          fi
-          git commit -m "chore: refresh support-case screenshot from CI"
-          git push origin "HEAD:${GITHUB_REF_NAME}"
+      - name: Upload fresh browser screenshot
+        uses: actions/upload-artifact@v4
+        with:
+          name: support-case-browser-screenshot
+          path: screenshots/06-support-case-browser.png
+          retention-days: 14
