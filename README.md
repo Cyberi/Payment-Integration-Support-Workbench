@@ -216,3 +216,7 @@ tests/          unittest suite (also pytest-compatible)
 ## License
 
 MIT. See [LICENSE](LICENSE).
+
+## Developed by
+
+Vahid Razavi
