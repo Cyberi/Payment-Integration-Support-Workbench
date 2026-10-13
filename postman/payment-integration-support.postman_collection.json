@@ -25,6 +25,14 @@
     {
       "key": "idemKey",
       "value": ""
+    },
+    {
+      "key": "timeoutOrderId",
+      "value": ""
+    },
+    {
+      "key": "timeoutPaymentId",
+      "value": ""
     }
   ],
   "item": [
@@ -59,7 +67,7 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('200', () => pm.response.to_have.status(200));",
+                  "pm.test('200', () => pm.response.to.have.status(200));",
                   "pm.test('simulation mode', () => pm.expect(pm.response.json().mode).to.eql('simulation-only'));"
                 ]
               }
@@ -112,7 +120,7 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('201', () => pm.response.to_have.status(201));",
+                  "pm.test('201', () => pm.response.to.have.status(201));",
                   "pm.collectionVariables.set('orderId', pm.response.json().order.id);"
                 ]
               }
@@ -173,7 +181,7 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('201', () => pm.response.to_have.status(201));",
+                  "pm.test('201', () => pm.response.to.have.status(201));",
                   "pm.collectionVariables.set('paymentId', pm.response.json().payment.id);"
                 ]
               }
@@ -367,7 +375,7 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('409', () => pm.response.to_have.status(409));",
+                  "pm.test('409', () => pm.response.to.have.status(409));",
                   "pm.test('code', () => pm.expect(pm.response.json().error.code).to.eql('IDEMPOTENCY_KEY_REUSED'));"
                 ]
               }
@@ -456,7 +464,7 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('401', () => pm.response.to_have.status(401));"
+                  "pm.test('401', () => pm.response.to.have.status(401));"
                 ]
               }
             }
@@ -467,6 +475,54 @@
     {
       "name": "4 · Timeout and verify",
       "item": [
+        {
+          "name": "Create order for timeout test",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{apiKey}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/orders",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "orders"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"merchant_id\": \"mer_sefid\",\n  \"amount_irr\": 250000,\n  \"description\": \"آزمایش timeout\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201', () => pm.response.to.have.status(201));",
+                  "pm.collectionVariables.set('timeoutOrderId', pm.response.json().order.id);"
+                ]
+              }
+            }
+          ]
+        },
         {
           "name": "Create payment with provider timeout (expect 202 unknown)",
           "request": {
@@ -502,7 +558,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"order_id\": \"{{orderId}}\",\n  \"amount_irr\": 250000\n}",
+              "raw": "{\n  \"order_id\": \"{{timeoutOrderId}}\",\n  \"amount_irr\": 250000\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -516,14 +572,24 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.variables.set('idemKey', 'idem_' + Date.now() + '_' + Math.floor(Math.random()*1e6));"
+                  "pm.collectionVariables.set('idemKey', 'idem_' + Date.now() + '_' + Math.floor(Math.random()*1e6));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('202 unknown', () => { pm.response.to.have.status(202); pm.expect(pm.response.json().payment.status).to.eql('unknown'); });",
+                  "pm.collectionVariables.set('timeoutPaymentId', pm.response.json().payment.id);"
                 ]
               }
             }
           ]
         },
         {
-          "name": "Verify payment status",
+          "name": "Verify timeout payment status",
           "request": {
             "method": "POST",
             "header": [
@@ -533,7 +599,7 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/v1/payments/{{paymentId}}/verify",
+              "raw": "{{baseUrl}}/api/v1/payments/{{timeoutPaymentId}}/verify",
               "host": [
                 "{{baseUrl}}"
               ],
@@ -541,7 +607,7 @@
                 "api",
                 "v1",
                 "payments",
-                "{{paymentId}}",
+                "{{timeoutPaymentId}}",
                 "verify"
               ]
             }
@@ -552,7 +618,8 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('verify returns after', () => pm.expect(pm.response.json()).to.have.property('after'));"
+                  "pm.test('verify returns after', () => pm.expect(pm.response.json()).to.have.property('after'));",
+                  "pm.test('provider status resolved', () => pm.expect(pm.response.json().after.payment_status).to.eql('pending'));"
                 ]
               }
             }
@@ -672,7 +739,7 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('422', () => pm.response.to_have.status(422));"
+                  "pm.test('422', () => pm.response.to.have.status(422));"
                 ]
               }
             }
@@ -824,7 +891,7 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('201', () => pm.response.to_have.status(201));"
+                  "pm.test('201', () => pm.response.to.have.status(201));"
                 ]
               }
             }
