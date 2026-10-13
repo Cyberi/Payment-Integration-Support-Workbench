@@ -216,3 +216,7 @@ tests/          تست‌های unittest (سازگار با pytest)
 ## مجوز
 
 MIT. فایل [LICENSE](LICENSE) را ببینید.
+
+## Developed by
+
+Vahid Razavi
